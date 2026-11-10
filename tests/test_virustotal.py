@@ -1,8 +1,7 @@
 import httpx
 import pytest
 
-from argus.intelligence.virustotal import lookup_ip
-
+from argus.intelligence.virustotal import lookup_ip, summarize_ip_report
 
 def test_virustotal_success(monkeypatch):
     fake_data = {
@@ -36,7 +35,6 @@ def test_virustotal_success(monkeypatch):
 
     assert result == fake_data
     assert result["data"]["attributes"]["last_analysis_stats"]["malicious"] == 0
-    import pytest
 
 
 def test_virustotal_rate_limit(monkeypatch):
@@ -56,3 +54,53 @@ def test_virustotal_rate_limit(monkeypatch):
         lookup_ip("8.8.8.8", "test-api-key")
 
     assert exc_info.value.response.status_code == 429
+
+def test_summarize_ip_report_with_detection():
+    report = {
+        "data": {
+            "id": "8.8.8.8",
+            "attributes": {
+                "last_analysis_stats": {
+                    "malicious": 1,
+                    "suspicious": 0,
+                    "harmless": 53,
+                    "undetected": 38,
+                },
+                "reputation": 100,
+            },
+        },
+    }
+
+    summary = summarize_ip_report(report)
+
+    assert summary["indicator"] == "8.8.8.8"
+    assert summary["source"] == "VirusTotal"
+    assert summary["malicious"] == 1
+    assert summary["suspicious"] == 0
+    assert summary["harmless"] == 53
+    assert summary["undetected"] == 38
+    assert summary["reputation"] == 100
+    assert summary["assessment"] == "Review required"
+
+def test_summarize_ip_report_without_detections():
+    report = {
+        "data": {
+            "id": "1.1.1.1",
+            "attributes": {
+                "last_analysis_stats": {
+                    "malicious": 0,
+                    "suspicious": 0,
+                    "harmless": 80,
+                    "undetected": 10,
+                },
+                "reputation": 50,
+            },
+        },
+    }
+
+    summary = summarize_ip_report(report)
+
+    assert summary["indicator"] == "1.1.1.1"
+    assert summary["malicious"] == 0
+    assert summary["suspicious"] == 0
+    assert summary["assessment"] == "No detections reported"
