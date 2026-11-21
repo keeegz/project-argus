@@ -1,7 +1,12 @@
 import httpx
 import pytest
 
-from argus.intelligence.virustotal import lookup_ip, summarize_ip_report
+from argus.intelligence.virustotal import (
+    lookup_ip,
+    summarize_ip_report,
+    lookup_file_hash,
+    summarize_file_report,
+)
 
 def test_virustotal_success(monkeypatch):
     fake_data = {
@@ -103,4 +108,90 @@ def test_summarize_ip_report_without_detections():
     assert summary["indicator"] == "1.1.1.1"
     assert summary["malicious"] == 0
     assert summary["suspicious"] == 0
+    assert summary["assessment"] == "No detections reported"
+
+def test_virustotal_file_hash_success(monkeypatch):
+    file_hash = "a" * 64
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "data": {
+                    "id": file_hash,
+                    "type": "file"
+                }
+            }
+
+    def fake_get(url, headers, timeout):
+        assert url == (
+            f"https://www.virustotal.com/api/v3/files/{file_hash}"
+        )
+        assert headers["x-apikey"] == "test-api-key"
+        assert timeout == 10.0
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "argus.intelligence.virustotal.httpx.get",
+        fake_get
+    )
+
+    result = lookup_file_hash(file_hash, "test-api-key")
+
+    assert result["data"]["id"] == file_hash
+    assert result["data"]["type"] == "file"
+
+def test_summarize_file_report_with_detections():
+    fake_report = {
+        "data": {
+            "id": "a" * 64,
+            "attributes": {
+                "meaningful_name": "suspicious.exe",
+                "type_description": "Win32 EXE",
+                "size": 245760,
+                "sha256": "a" * 64,
+                "reputation": -10,
+                "last_analysis_stats": {
+                    "malicious": 42,
+                    "suspicious": 3,
+                    "harmless": 28,
+                    "undetected": 5,
+                },
+            },
+        },
+    }
+
+    summary = summarize_file_report(fake_report)
+
+    assert summary["file_name"] == "suspicious.exe"
+    assert summary["file_type"] == "Win32 EXE"
+    assert summary["malicious"] == 42
+    assert summary["suspicious"] == 3
+    assert summary["assessment"] == "Review required"
+
+
+def test_summarize_file_report_without_detections():
+    fake_report = {
+        "data": {
+            "id": "b" * 64,
+            "attributes": {
+                "meaningful_name": "unknown.exe",
+                "last_analysis_stats": {
+                    "malicious": 0,
+                    "suspicious": 0,
+                    "harmless": 60,
+                    "undetected": 10,
+                },
+            },
+        },
+    }
+
+    summary = summarize_file_report(fake_report)
+
+    assert summary["malicious"] == 0
+    assert summary["suspicious"] == 0
+    assert summary["harmless"] == 60
     assert summary["assessment"] == "No detections reported"
