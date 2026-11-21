@@ -2,33 +2,48 @@
 
 **Automated Reputation Gathering & Unified Security**
 
-A local-first, Python-based threat intelligence enrichment and security analysis project designed to support security operations investigations.
+A local-first, Python-based threat intelligence enrichment and security analysis tool designed to support Security Operations Center (SOC) investigations.
 
 ## Overview
 
-Project ARGUS is an evolving cybersecurity engineering project focused on automating the collection, analysis, and interpretation of threat intelligence.
+Project ARGUS is an independently developed cybersecurity engineering project focused on automating indicator analysis, threat intelligence enrichment, and security investigation workflows.
 
-The project aims to help security analysts investigate suspicious indicators, correlate intelligence from multiple sources, and produce actionable, explainable findings.
+ARGUS enables analysts to validate indicators, retrieve intelligence from external providers, and generate structured, explainable investigation results.
 
-ARGUS is being developed locally to minimize infrastructure costs while emphasizing modular design, automated testing, and secure development practices.
+The project emphasizes modular Python development, secure API integration, automated testing, and practical SOC workflows.
 
 ## Current Capabilities
 
 ### IP Address Analysis
-- Validates IPv4 and IPv6 addresses.
-- Identifies private, globally routable, loopback, multicast, and reserved address classifications.
-- Handles invalid IP input.
+- Supports IPv4 and IPv6 addresses.
+- Identifies private, global, loopback, multicast, and reserved addresses.
+- Validates input and handles malformed IP addresses.
+- Generates structured IP classification reports.
 
-### VirusTotal Integration — Initial Implementation
-- Constructs VirusTotal API v3 IP reputation requests.
-- Supports API-key authentication through a function parameter.
-- Retrieves and returns JSON responses.
-- Raises exceptions for unsuccessful HTTP responses.
-- Includes mocked tests for successful requests and HTTP 429 rate-limit responses.
+### File Hash Analysis
+- Identifies MD5, SHA-1, and SHA-256 hash formats.
+- Validates hexadecimal characters and expected hash lengths.
+- Rejects invalid or unsupported hash formats.
+- Supports VirusTotal file hash enrichment.
 
-**Status:** Unit-tested integration module. Live API connectivity and end-to-end enrichment are not yet implemented or validated.
+### VirusTotal Threat Intelligence
+- Integrates with VirusTotal API v3.
+- Supports IP and file report retrieval through reusable Python functions.
+- Retrieves file metadata, detection statistics, and reputation information.
+- Generates structured intelligence summaries.
+- Handles HTTP errors, including missing reports and API rate limits.
+- Uses environment variables to access API credentials in the CLI.
 
-## Project Structure
+**Integration status:** Live VirusTotal file hash lookups have been successfully validated. IP reputation retrieval is implemented and unit-tested but is not yet exposed through the CLI.
+
+### Interactive Investigation Console
+- Menu-driven command-line interface.
+- Supports repeated investigations within a single session.
+- Allows analysts to investigate IP addresses or file hashes.
+- Displays structured analysis results.
+- Provides a controlled exit option.
+
+## Architecture
 
 ```text
 project-argus/
@@ -36,16 +51,27 @@ project-argus/
 │   ├── __init__.py
 │   ├── main.py
 │   ├── ip_analyzer.py
+│   ├── hash_analyzer.py
 │   └── intelligence/
 │       ├── __init__.py
 │       └── virustotal.py
 ├── tests/
 │   ├── test_ip_analyzer.py
+│   ├── test_hash_analyzer.py
 │   └── test_virustotal.py
 ├── .gitignore
 ├── README.md
 └── requirements.txt
 ```
+
+### Investigation Workflow
+
+1. Analyst selects an indicator type.
+2. ARGUS validates and classifies the indicator.
+3. For valid file hashes, ARGUS queries VirusTotal when an API key is configured.
+4. The application parses available threat intelligence.
+5. ARGUS displays a structured investigation report.
+6. The analyst can return to the main menu for another investigation.
 
 ## Getting Started
 
@@ -53,7 +79,7 @@ project-argus/
 
 - Python 3.13
 - Git
-- A terminal or Python-compatible development environment
+- VirusTotal API key for live file intelligence lookups
 
 ### Installation
 
@@ -64,15 +90,10 @@ git clone https://github.com/keeegz/project-argus.git
 cd project-argus
 ```
 
-Create a virtual environment:
+Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
-```
-
-Activate it in PowerShell:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
@@ -82,67 +103,131 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-### Run the IP Analyzer
+### Configure VirusTotal
+
+In PowerShell, enter:
+
+```powershell
+$env:VT_API_KEY = Read-Host "Enter VirusTotal API key"
+```
+
+The environment variable is available to applications launched from that PowerShell session. Do not store API keys in source code or commit them to GitHub.
+
+### Launch ARGUS
 
 ```powershell
 python -m argus.main
 ```
 
-The CLI prompts for an IP address and displays its classification.
+Select an investigation type from the interactive menu.
+
+## Example Investigation
+
+The following results were observed during a live VirusTotal file hash investigation.
+
+**File:** BreakOut.exe  
+**Type:** Win32 EXE  
+**Size:** 2,048,000 bytes
+
+**SHA-256:**
+
+```text
+226a723ffb4a91d9950a8b266167c5b354ab0db1dc225578494917fe53867ef2
+```
+
+**VirusTotal results:**
+
+| Intelligence Field | Result |
+|---|---|
+| Malicious detections | 52 |
+| Suspicious detections | 0 |
+| Harmless detections | 0 |
+| Undetected | 10 |
+| Reputation | -171 |
+| ARGUS assessment | Review required |
+
+These findings demonstrate ARGUS's ability to retrieve and summarize real-world file intelligence.
+
+VirusTotal detections are intelligence signals, not definitive proof of malicious activity. Findings should be evaluated alongside endpoint telemetry, file behavior, and investigation context.
 
 ## Automated Testing
 
-ARGUS uses `pytest` to validate existing functionality and detect regressions.
+Project ARGUS uses `pytest` to validate core functionality.
 
-Run the full test suite:
+Run the complete test suite:
 
 ```powershell
 python -m pytest -v
 ```
 
-**Current baseline: 6 passing tests.**
+**Current verified baseline: 16 passing tests.**
 
-Tests cover IP classification, invalid input handling, simulated VirusTotal API success, and HTTP 429 error propagation.
+Tests cover:
 
-External HTTP requests are mocked during unit testing. Live provider behavior requires separate integration testing.
+- IPv4 and IPv6 classification.
+- Invalid IP address handling.
+- MD5, SHA-1, and SHA-256 identification.
+- Invalid file hash detection.
+- Mocked VirusTotal API requests.
+- HTTP 429 rate-limit error propagation.
+- IP intelligence summarization.
+- File intelligence summarization.
+
+External HTTP requests are mocked during unit testing to avoid unnecessary API usage.
+
+Interactive CLI behavior has also been manually tested.
 
 ## Security Considerations
 
-- API credentials must never be committed to source control.
-- Local virtual environments and environment files are excluded through `.gitignore`.
-- External threat intelligence requests should be restricted to appropriate indicators.
-- Future enhancements will include dependency vulnerability scanning and SBOM generation.
+- API keys are retrieved from environment variables.
+- Credentials must never be committed to Git.
+- Virtual environments should remain excluded from version control.
+- VirusTotal results require analyst interpretation.
+- External intelligence requests should be performed only for authorized investigations.
+- HTTP failures and API rate limits must be handled safely.
 
 ## Development Roadmap
 
-- [x] Initialize local Python environment and Git repository.
+### Completed
+- [x] Establish Python project structure and Git repository.
 - [x] Implement IP address classification.
-- [x] Establish automated unit testing.
-- [x] Create initial VirusTotal integration.
-- [x] Publish project to GitHub.
-- [ ] Implement secure API credential loading.
-- [ ] Validate live VirusTotal API connectivity.
-- [ ] Add structured intelligence parsing and enrichment.
-- [ ] Implement graceful error handling and rate-limit management.
+- [x] Develop VirusTotal IP lookup functions.
+- [x] Implement MD5, SHA-1, and SHA-256 identification.
+- [x] Develop VirusTotal file hash enrichment.
+- [x] Generate structured intelligence summaries.
+- [x] Implement HTTP error handling.
+- [x] Build an interactive investigation menu.
+- [x] Validate live VirusTotal file intelligence retrieval.
+- [x] Establish 16 passing automated tests.
+
+### Planned
+- [ ] Implement automated CLI integration tests.
+- [ ] Add VirusTotal IP enrichment to the CLI.
+- [ ] Export investigation results to JSON.
+- [ ] Implement domain and URL intelligence analysis.
 - [ ] Integrate additional intelligence sources, including AbuseIPDB.
 - [ ] Develop explainable indicator risk scoring.
-- [ ] Generate consolidated analyst investigation reports.
-- [ ] Implement SBOM generation and dependency vulnerability scanning.
-- [ ] Introduce automated CI security and regression checks.
+- [ ] Generate consolidated investigation reports.
+- [ ] Introduce GitHub Actions continuous integration.
+- [ ] Implement dependency vulnerability scanning and SBOM generation.
+- [ ] Explore Microsoft Sentinel and Azure integration.
 
 ## Engineering Objectives
 
-ARGUS is intended to demonstrate practical experience in:
+Project ARGUS demonstrates hands-on development in:
 
-- Python development and modular software architecture.
-- REST API integration and JSON processing.
-- Threat intelligence enrichment and security operations automation.
-- Automated testing and error handling.
-- Secure software development and supply chain visibility.
-- Version control and technical documentation.
+- Python programming and modular architecture.
+- REST API integration.
+- JSON parsing and structured reporting.
+- Threat intelligence enrichment.
+- SOC investigation workflows.
+- Automated testing and mocking.
+- Exception handling.
+- Secure credential management.
+- Git version control and technical documentation.
 
 ## Project Status
 
-**Active development — Milestone 2 complete.**
+**Active Development — File Hash Intelligence and Interactive CLI Milestones Complete**
 
-The current implementation provides a tested
+Project ARGUS is an evolving security engineering portfolio project. Future development will focus on broader indicator coverage, investigation automation, reporting, and cloud security integration.
